@@ -1,0 +1,29 @@
+{
+  "name": "py-spy-ui",
+  "homepage": "https://github.com/benfred/py-spy",
+  "version": "0.2.0.dev1",
+  "author": {
+    "name": "Ben Frederickson",
+    "url": "https://www.benfrederickson.com"
+  },
+  "dependencies": {
+    "@types/d3": "^5.0.0",
+    "d3-axis": "^1.0.12",
+    "d3-brush": "^1.0.6",
+    "d3-ease": "^1.0.5",
+    "d3-fetch": "^1.1.2",
+    "d3-flame-graph": "^2.0.3",
+    "d3-scale": "^2.1.2",
+    "d3-selection": "^1.3.2",
+    "d3-shape": "^1.2.2"
+  },
+  "devDependencies": {
+    "rollup": "^0.64.0",
+    "rollup-plugin-ascii": "0.0.3",
+    "rollup-plugin-commonjs": "^8.0.0",
+    "rollup-plugin-node-resolve": "^3.0.0",
+    "rollup-plugin-terser": "1",
+    "rollup-plugin-typescript2": "^0.17.0",
+    "typescript": "^2.5.3"
+  }
+}

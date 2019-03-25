@@ -23,3 +23,8 @@ var/
 .vscode/
 **/.vagrant
 *.log
+
+# javascript 
+src/web_viewer/node_modules/
+src/web_viewer/.rpt2_cache/
+src/web_viewer/assets/bundle.min.js

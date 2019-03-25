@@ -29,6 +29,16 @@ extern crate winapi;
 extern crate cpp_demangle;
 extern crate remoteprocess;
 
+#[macro_use]
+extern crate serde_derive;
+extern crate serde;
+extern crate serde_json;
+#[macro_use]
+extern crate rouille;
+#[macro_use]
+extern crate rust_embed;
+extern crate mime_guess;
+
 mod config;
 mod binary_parser;
 mod cython;
@@ -37,8 +47,10 @@ mod python_bindings;
 mod python_interpreters;
 mod python_spy;
 mod stack_trace;
+
 mod console_viewer;
 mod flamegraph;
+mod web_viewer;
 mod utils;
 mod version;
 
@@ -123,6 +135,47 @@ fn sample_console(process: &mut PythonSpy,
     Ok(())
 }
 
+fn sample_serve(process: &mut PythonSpy, display: &str, config: &config::Config) -> Result<(), Error> {
+    let running = Arc::new(AtomicBool::new(true));
+    let r = running.clone();
+    ctrlc::set_handler(move || {
+        r.store(false, Ordering::SeqCst);
+    }).expect("Error setting Ctrl-C handler");
+
+    let start = std::time::Instant::now();
+
+    let mut server = web_viewer::WebViewer::new(display, &format!("{}", process.version), config)?;
+    for _sleep in utils::Timer::new(Duration::from_nanos(1_000_000_000 / config.sampling_rate)) {
+        /* TODO: display notes on late samples
+                 handle sampling errors
+        */
+        match process.get_stack_traces() {
+            Ok(traces) => {
+                server.increment(traces)?;
+            },
+            Err(_err) => {
+                if process_exitted(&process.process) {
+                    server.notify_exitted();
+                    println!("\nprocess {} ended", process.pid);
+                    println!("elapsed: {:?}", std::time::Instant::now() - start);
+                    println!("Press Control-C to stop serving");
+                    while running.load(Ordering::SeqCst) {
+                       std::thread::sleep(Duration::from_millis(10));
+                    }
+                    break;
+                } else {
+                    // TODO !!! server.increment_error(&err);
+                }
+            }
+        }
+
+        if !running.load(Ordering::SeqCst) {
+            break;
+        }
+    }
+
+    Ok(())
+}
 
 fn sample_flame(process: &mut PythonSpy, filename: &str, config: &config::Config) -> Result<(), Error> {
     let max_samples = config.duration * config.sampling_rate;
@@ -220,6 +273,8 @@ fn pyspy_main() -> Result<(), Error> {
             print_traces(&process.get_stack_traces()?, true);
         } else if let Some(ref flame_file) = config.flame_file_name {
             sample_flame(&mut process, &flame_file, &config)?;
+        } else if config.serve {
+            sample_serve(&mut process, &format!("pid: {}", pid), &config)?;
         } else {
             sample_console(&mut process, &format!("pid: {}", pid), &config)?;
         }
@@ -244,6 +299,8 @@ fn pyspy_main() -> Result<(), Error> {
             Ok(mut process) => {
                 if let Some(ref flame_file) = config.flame_file_name {
                     sample_flame(&mut process, &flame_file, &config)
+                } else if config.serve {
+                    sample_serve(&mut process, &subprocess.join(" "), &config)
                 } else {
                     sample_console(&mut process, &subprocess.join(" "), &config)
                 }

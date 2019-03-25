@@ -6,7 +6,7 @@ use read_process_memory::{CopyAddress, copy_address};
 use python_interpreters::{InterpreterState, ThreadState, FrameObject, CodeObject, StringObject, BytesObject};
 use utils::{copy_pointer};
 
-#[derive(Debug)]
+#[derive(Debug, Clone, Serialize)]
 pub struct StackTrace {
     pub thread_id: u64,
     pub os_thread_id: Option<u64>,
@@ -15,7 +15,7 @@ pub struct StackTrace {
     pub frames: Vec<Frame>
 }
 
-#[derive(Debug, Hash, Eq, PartialEq, Ord, PartialOrd, Clone)]
+#[derive(Debug, Hash, Eq, PartialEq, Ord, PartialOrd, Clone, Serialize)]
 pub struct Frame {
     pub name: String,
     pub filename: String,

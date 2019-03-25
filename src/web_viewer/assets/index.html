@@ -1,0 +1,103 @@
+<!doctype html>
+<html lang="en">
+<head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <!-- TODO: dynamic title -->
+    <title>py-spy> overview</title>
+    <!-- TODO: get these into static asset pieplines-->
+    <link rel="stylesheet" href="/assets/pure-base-menu-grid.css">
+    <link rel="stylesheet" type="text/css" href="/assets/d3-flamegraph.css">
+</head>
+<body>
+<style>
+/* TODO: inline this into pure-css itself. Probably a ton of other css changes
+needed too */
+.py-spy-menu {
+    border-bottom-width: 1px;
+    border-bottom-style: solid;
+}
+.pure-menu-link {
+    color: #444;
+    border-bottom-width:2px;
+    border-bottom-style:solid;
+    border-bottom-color:transparent;
+}
+.pure-menu-heading {
+    margin-left:20px;
+}
+
+.pure-menu-selected {
+    border-bottom-color:orange;
+}
+
+:not(.pure-menu-selected).pure-menu-link:hover {
+    border-bottom-color: rgb(255,165,0, .5);
+}
+
+.pure-menu-link:hover {
+    border-bottom-color:orange;
+    background-color:unset;
+}
+
+.pure-menu-link:focus {
+    background-color:unset;
+}
+.pure-g > div {
+    -webkit-box-sizing: border-box;
+    -moz-box-sizing: border-box;
+    box-sizing: border-box;
+}
+.l-box {
+    padding: 1em;
+}
+</style>
+
+<div class="pure-g">
+    <div class="pure-u-1">
+        <div class="pure-menu pure-menu-horizontal py-spy-menu">
+            <a href="https://github.com/benfred/py-spy" class="pure-menu-heading pure-menu-link"><b>py-spy</b></a>
+            <ul class="pure-menu-list">
+                <li class="pure-menu-item"><a href="#" class="pure-menu-link pure-menu-selected">Overview</a></li>
+                <li class="pure-menu-item"><a href="#" class="pure-menu-link">Modules</a></li>
+                <li class="pure-menu-item"><a href="#" class="pure-menu-link">Files</a></li>
+                <li class="pure-menu-item"><a href="#" class="pure-menu-link">Functions</a></li>
+            </ul>
+        </div>
+    </div>
+</div>
+
+
+<div class="pure-g">
+    <div class="pure-u-1 pure-u-lg-5-6 l-box">
+        <div class="main">
+            <div id="timeselector"></div>
+            <div style="margin:20px; margin-bottom:10px; text-align: left; font-size:12px">
+                <span style="float:left">Showing <b><span id="countselection">0</span></b> stack traces from <b><span id="startselection">0s</span></b> to <b><span id="endselection">12.34s</span></b>. </span>
+                <div style="float:right; font-size:12px">
+                    <input class="flameoption" type="checkbox" id = "include_threads"> Show threads
+                    <input class="flameoption" type="checkbox" id = "include_lines" checked> Show line numbers
+                    <input class="flameoption" type="checkbox" id = "include_idle"> Include idle frames
+                    <input class="flameoption" type="checkbox" id = "gil_only"> GIL only
+                </div>
+                <div style="clear: both"></div>
+            </div>
+            <div id="chart"></div>
+        </div>
+    </div>
+    <div class="pure-u-1 pure-u-1 pure-u-lg-1-6 l-box" style="font-size:12px">
+        <p>
+        <span id ="python_command"></span><br><br>
+        <span style="color:#444">Python v<span id="python_version"></span></br></span>
+        <b><span id="sampling_rate">100</span></b> samples / second<br>
+        Process is  <b><span id="runningstate">running</span></b><br>
+        </p>
+    </div>
+</div>
+
+<script src="/assets/bundle.min.js"></script>
+<script>
+    let flamegraph = new pyspy.FlameGraph(document.getElementById("chart"), document.getElementById("timeselector"));
+</script>
+</body>
+</html>

@@ -216,11 +216,18 @@ impl NativeStack {
                                        python_frame_index, trace.frames.len()));
             }
 
+            // If we've set the frame to not active because we have 0 python frames, remove
+            // TODO: remove this once we have better idle detection
+            if !trace.active && trace.frames.len() == 0 {
+                trace.active = true;
+            }
+
             for frame in merged.iter_mut() {
                 self.cython_maps.translate(frame);
             }
             trace.os_thread_id = Some(os_thread_id.id()?);
             trace.frames = merged;
+
         }
         Ok(traces)
     }
