@@ -7,13 +7,13 @@ mod unwinder;
 use std;
 use mach;
 
-use super::Error;
+use super::{ProcessMemory, Error};
 use mach::kern_return::{KERN_SUCCESS};
 use mach::port::{mach_port_name_t, MACH_PORT_NULL};
 use mach::traps::{task_for_pid, mach_task_self};
-pub use read_process_memory::{Pid, ProcessHandle};
+use read_process_memory::{CopyAddress};
 
-use libc::{c_int};
+use libc::{c_int, pid_t};
 
 use mach::kern_return::{kern_return_t};
 use mach::mach_types::{thread_act_t};
@@ -26,6 +26,9 @@ pub use self::unwinder::Unwinder;
 
 use libproc::libproc::proc_pid::{pidpath, pidinfo, PIDInfo, PidInfoFlavor};
 
+pub type Pid = pid_t;
+pub type Tid = u32;
+
 pub struct Process {
     pub pid: Pid,
     pub task: mach_port_name_t
@@ -33,7 +36,7 @@ pub struct Process {
 
 #[derive(Eq, PartialEq, Hash, Copy, Clone)]
 pub struct Thread {
-    pub tid: u32
+    pub tid: Tid
 }
 
 impl Process {
@@ -45,8 +48,6 @@ impl Process {
         }
         Ok(Process{pid, task})
     }
-
-    pub fn handle(&self) -> ProcessHandle { self.task }
 
     pub fn exe(&self) -> Result<String, Error> {
         pidpath(self.pid).map_err(|e| Error::Other(format!("proc_pidpath failed: {}", e)))
@@ -79,7 +80,13 @@ impl Process {
     }
 
     pub fn unwinder(&self) -> Result<Unwinder, Error> {
-        Ok(Unwinder::new(self.pid, self.task)?)
+        Ok(Unwinder::new(self.pid)?)
+    }
+}
+
+impl super::ProcessMemory for Process {
+    fn read(&self, addr: usize, buf: &mut [u8]) -> Result<(), Error> {
+        Ok(self.task.copy_address(addr, buf)?)
     }
 }
 
@@ -89,7 +96,15 @@ use self::mach_thread_bindings::{thread_info, thread_basic_info, thread_identifi
 
 
 impl Thread {
-    pub fn id(&self) -> Result<u64, Error> {
+    pub fn new(tid: Tid) -> Result<Thread, Error> {
+        Ok(Thread{tid})
+    }
+
+    pub fn id(&self) -> Result<Tid, Error> {
+        Ok(self.tid)
+    }
+
+    pub fn thread_handle(&self) -> Result<u64, Error> {
         let thread_id = self.get_thread_identifier_info()?;
         Ok(thread_id.thread_handle)
     }
@@ -169,3 +184,5 @@ impl Default for proc_vnodepathinfo {
 impl PIDInfo for proc_vnodepathinfo {
     fn flavor() -> PidInfoFlavor { PidInfoFlavor::VNodePathInfo }
 }
+
+

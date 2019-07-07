@@ -1,22 +1,33 @@
+#[cfg(unwind)]
 pub mod libunwind;
+#[cfg(unwind)]
 mod gimli_unwinder;
+#[cfg(unwind)]
 mod symbolication;
+use libc::pid_t;
+#[cfg(unwind)]
 use libc::c_void;
-
-use goblin::error::Error as GoblinError;
 
 use nix::{self, sys::wait, sys::ptrace, {sched::{setns, CloneFlags}}};
 use std::io::Read;
 use std::os::unix::io::AsRawFd;
 use std::fs::File;
 
-use dwarf_unwind::Registers;
+#[cfg(unwind)]
+use crate::dwarf_unwind::Registers;
 use super::Error;
+
+#[cfg(unwind)]
 pub use self::gimli_unwinder::*;
+#[cfg(unwind)]
 pub use self::symbolication::*;
+#[cfg(unwind)]
 pub use self::libunwind::{LibUnwind};
 
-pub use read_process_memory::{Pid, ProcessHandle};
+use read_process_memory::{CopyAddress};
+
+pub type Pid = pid_t;
+pub type Tid = pid_t;
 
 pub struct Process {
     pub pid: Pid,
@@ -31,8 +42,6 @@ impl Process {
     pub fn new(pid: Pid) -> Result<Process, Error> {
         Ok(Process{pid})
     }
-
-    pub fn handle(&self) -> ProcessHandle { self.pid }
 
     pub fn exe(&self) -> Result<String, Error> {
         let path = std::fs::read_link(format!("/proc/{}/exe", self.pid))?;
@@ -87,20 +96,28 @@ impl Process {
         Ok(ret)
     }
 
-    pub fn unwinder(&self) -> Result<Unwinder, GoblinError> {
+    #[cfg(unwind)]
+    pub fn unwinder(&self) -> Result<Unwinder, Error> {
         Unwinder::new(self.pid)
     }
 }
 
+impl super::ProcessMemory for Process {
+    fn read(&self, addr: usize, buf: &mut [u8]) -> Result<(), Error> {
+        Ok(self.pid.copy_address(addr, buf)?)
+    }
+}
+
 impl Thread {
-    pub fn new(threadid: i32) -> Thread{
-        Thread{tid: nix::unistd::Pid::from_raw(threadid)}
+    pub fn new(threadid: i32) -> Result<Thread, Error> {
+        Ok(Thread{tid: nix::unistd::Pid::from_raw(threadid)})
     }
 
     pub fn lock(&self) -> Result<ThreadLock, Error> {
         Ok(ThreadLock::new(self.tid)?)
     }
 
+    #[cfg(unwind)]
     pub fn registers(&self) -> Result<Registers, Error> {
         unsafe {
             let mut data: Registers = std::mem::zeroed();
@@ -114,8 +131,8 @@ impl Thread {
         }
     }
 
-    pub fn id(&self) -> Result<u64, Error> {
-        Ok(self.tid.as_raw() as u64)
+    pub fn id(&self) -> Result<Tid, Error> {
+        Ok(self.tid.as_raw())
     }
 
     pub fn active(&self) -> Result<bool, Error> {
@@ -143,7 +160,7 @@ pub struct ThreadLock {
 
 impl ThreadLock {
     fn new(tid: nix::unistd::Pid) -> Result<ThreadLock, nix::Error> {
-        nix::sys::ptrace::attach(tid)?;
+        ptrace::attach(tid)?;
         wait::waitpid(tid, Some(wait::WaitPidFlag::WSTOPPED))?;
         debug!("attached to thread {}", tid);
         Ok(ThreadLock{tid})
@@ -152,7 +169,7 @@ impl ThreadLock {
 
 impl Drop for ThreadLock {
     fn drop(&mut self) {
-        if let Err(e) = nix::sys::ptrace::detach(self.tid) {
+        if let Err(e) = ptrace::detach(self.tid) {
             error!("Failed to detach from thread {} : {}", self.tid, e);
         }
         debug!("detached from thread {}", self.tid);

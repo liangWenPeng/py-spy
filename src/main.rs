@@ -11,6 +11,7 @@ extern crate env_logger;
 extern crate failure;
 extern crate goblin;
 extern crate indicatif;
+extern crate inferno;
 #[macro_use]
 extern crate lazy_static;
 extern crate libc;
@@ -18,7 +19,6 @@ extern crate libc;
 extern crate log;
 extern crate memmap;
 extern crate proc_maps;
-extern crate benfred_read_process_memory as read_process_memory;
 extern crate regex;
 extern crate tempdir;
 extern crate tempfile;
@@ -27,6 +27,7 @@ extern crate termios;
 #[cfg(windows)]
 extern crate winapi;
 extern crate cpp_demangle;
+extern crate rand;
 extern crate remoteprocess;
 
 #[macro_use]
@@ -41,7 +42,9 @@ extern crate mime_guess;
 
 mod config;
 mod binary_parser;
+#[cfg(unwind)]
 mod cython;
+#[cfg(unwind)]
 mod native_stack_trace;
 mod python_bindings;
 mod python_interpreters;
@@ -72,7 +75,7 @@ fn print_traces(traces: &[StackTrace], show_idle: bool) {
         }
 
         if let Some(os_thread_id) = trace.os_thread_id {
-            println!("Thread {:#X}/{:#X} ({})", trace.thread_id,  os_thread_id, trace.status_str());
+            println!("Thread {:#X}/{} ({})", trace.thread_id,  os_thread_id, trace.status_str());
         } else {
             println!("Thread {:#X} ({})", trace.thread_id, trace.status_str());
         }
@@ -112,7 +115,7 @@ fn sample_console(process: &mut PythonSpy,
                                          &format!("{}", process.version),
                                          1.0 / rate as f64)?;
 
-    for sleep in utils::Timer::new(Duration::from_nanos(1_000_000_000 / rate)) {
+    for sleep in utils::Timer::new(rate as f64) {
         if let Err(elapsed) = sleep {
             console.increment_late_sample(elapsed);
         }
@@ -199,7 +202,7 @@ fn sample_flame(process: &mut PythonSpy, filename: &str, config: &config::Config
 
     let mut exit_message = "";
 
-    for sleep in utils::Timer::new(Duration::from_nanos(1_000_000_000 / config.sampling_rate)) {
+    for sleep in utils::Timer::new(config.sampling_rate as f64) {
         if let Err(delay) = sleep {
             if delay > Duration::from_secs(1) {
                 // TODO: once this available on crates.io https://github.com/mitsuhiko/indicatif/pull/41
@@ -295,7 +298,7 @@ fn pyspy_main() -> Result<(), Error> {
             // sleep just in case: https://jvns.ca/blog/2018/01/28/mac-freeze/
             std::thread::sleep(Duration::from_millis(50));
         }
-        let result = match PythonSpy::retry_new(command.id() as read_process_memory::Pid, &config, 8) {
+        let result = match PythonSpy::retry_new(command.id() as remoteprocess::Pid, &config, 8) {
             Ok(mut process) => {
                 if let Some(ref flame_file) = config.flame_file_name {
                     sample_flame(&mut process, &flame_file, &config)

@@ -4,29 +4,26 @@ use std::rc::Rc;
 use std::cell::RefCell;
 use std::collections::BTreeMap;
 
-use read_process_memory::{TryIntoProcessHandle, ProcessHandle, copy_address};
 use goblin::Object;
-use goblin::error::Error as GoblinError;
 use memmap::Mmap;
 use proc_maps;
 
 use gimli::{EhFrame, BaseAddresses, Pointer, NativeEndian, EhFrameHdr};
 use goblin::elf::program_header::*;
-use gimli;
 
 use gimli::EndianRcSlice;
 type RcReader = EndianRcSlice<NativeEndian>;
 
-use super::super::{copy_struct, Error};
-use dwarf_unwind::{UnwindInfo, Registers};
+use super::super::{ProcessMemory, Error};
+use crate::dwarf_unwind::{UnwindInfo, Registers};
 
-use linux::symbolication::{SymbolData};
+use crate::linux::symbolication::{SymbolData};
 use super::super::StackFrame;
-use super::{Pid, Thread};
+use super::{Pid, Thread, Process};
 
 pub struct Unwinder {
     binaries: BTreeMap<u64, BinaryInfo>,
-    process: ProcessHandle,
+    process: Process,
     pid: Pid
 }
 
@@ -37,14 +34,14 @@ pub struct Cursor<'a> {
 }
 
 impl Unwinder {
-    pub fn new(pid: Pid) -> Result<Unwinder, GoblinError> {
-        let process = pid.try_into_process_handle()?;
+    pub fn new(pid: Pid) -> Result<Unwinder, Error> {
+        let process = Process::new(pid)?;
         let mut ret = Unwinder{binaries: BTreeMap::new(), process, pid};
         ret.reload()?;
         Ok(ret)
     }
 
-    pub fn reload(&mut self) -> Result<(), GoblinError> {
+    pub fn reload(&mut self) -> Result<(), Error> {
         // Get shared libraries from virtual memory mapped files
         let maps = &proc_maps::get_process_maps(self.pid)?;
         let shared_maps = maps.iter().filter(|m| m.is_exec() && !m.is_write() && m.is_read());
@@ -77,7 +74,7 @@ impl Unwinder {
             } else if filename != "[vsyscall]" {
                 // if the filename doesn't exist, its' almost certainly the vdso section
                 // read from the the target processses memory
-                vdso_data = copy_address(m.start(), m.size(), &self.process)?;
+                vdso_data = self.process.copy(m.start(), m.size())?;
                 &vdso_data
             } else {
                 // vsyscall region, can be ignored
@@ -122,7 +119,7 @@ impl Unwinder {
 
                     let eh_frame_addr = match eh_frame_hdr.eh_frame_ptr() {
                         Pointer::Direct(x) => x,
-                        Pointer::Indirect(x) => { copy_struct(x as usize, &self.process)? }
+                        Pointer::Indirect(x) => { self.process.copy_struct(x as usize)? }
                     };
 
                     // get the appropiate eh_frame section from the section_headers and load it up with gimli
@@ -168,11 +165,11 @@ impl Unwinder {
         Ok(Cursor{registers: thread.registers()?, parent: self, initial_frame: true})
     }
 
-    pub fn symbolicate(&self, addr: u64, callback: &mut FnMut(&StackFrame)) -> Result<(), Error> {
+    pub fn symbolicate(&self, addr: u64, line_info: bool, callback: &mut FnMut(&StackFrame)) -> Result<(), Error> {
         let binary = match self.get_binary(addr) {
             Some(binary) => binary,
             None => {
-                return Err(gimli::Error::NoUnwindInfoForAddress.into());
+                return Err(Error::NoBinaryForAddress(addr));
             }
         };
         if binary.filename != "[vdso]" {
@@ -182,7 +179,7 @@ impl Unwinder {
                 *symbols = Some(SymbolData::new(&binary.filename, binary.offset));
             }
             match symbols.as_ref() {
-                Some(Ok(symbols)) => symbols.symbolicate(addr, callback),
+                Some(Ok(symbols)) => symbols.symbolicate(addr, line_info, callback),
                 _ => {
                     // we probably failed to load the symbols (maybe goblin v0.15 dependency causing error
                     // in gimli/object crate). Rather than fail add a stub

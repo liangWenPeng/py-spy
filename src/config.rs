@@ -1,6 +1,6 @@
 use clap::{App, Arg};
 use failure::Error;
-use read_process_memory::Pid;
+use remoteprocess::Pid;
 
 #[derive(Debug, Clone)]
 pub struct Config {
@@ -21,11 +21,11 @@ pub struct Config {
 impl Config {
     pub fn from_commandline() -> Result<Config, Error> {
         // we don't yet support native tracing on 32 bit linux
-        let allow_native = !cfg!(all(target_os="linux", target_pointer_width="32"));
+        let allow_native = cfg!(unwind);
 
-        let matches = App::new("py-spy")
-            .version("0.2.0.dev1")
-            .about("A sampling profiler for Python programs")
+        let matches = App::new(crate_name!())
+            .version(crate_version!())
+            .about(crate_description!())
             .arg(Arg::with_name("function")
                 .short("F")
                 .long("function")
