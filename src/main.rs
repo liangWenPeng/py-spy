@@ -148,7 +148,7 @@ fn sample_serve(process: &mut PythonSpy, display: &str, config: &config::Config)
     let start = std::time::Instant::now();
 
     let mut server = web_viewer::WebViewer::new(display, &format!("{}", process.version), config)?;
-    for _sleep in utils::Timer::new(Duration::from_nanos(1_000_000_000 / config.sampling_rate)) {
+    for _sleep in utils::Timer::new(config.sampling_rate as f64) {
         /* TODO: display notes on late samples
                  handle sampling errors
         */
